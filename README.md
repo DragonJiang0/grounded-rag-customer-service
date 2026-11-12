@@ -68,6 +68,8 @@
 
 ````shell
 cd deploy
+cp .env.example .env
+vi .env #这里参考后面的配置说明
 docker-compose -f docker-compose-quickstart.yml up -d
 ````
 
