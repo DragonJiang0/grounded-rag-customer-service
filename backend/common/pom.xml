@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.zidong</groupId>
+    <artifactId>backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>common</artifactId>
+  <packaging>jar</packaging>
+  <name>common</name>
+  <description>公共模块：统一分页结果、业务异常、全局异常处理</description>
+
+  <dependencies>
+    <!-- 只需要 spring-web 这一层（ProblemDetail / @RestControllerAdvice / HttpStatus），
+         不引入 starter-web，避免把容器也带进公共模块 -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-web</artifactId>
+    </dependency>
+
+    <!-- SseEmitter 在 spring-webmvc 里，公共的 SSE 推送组件 EmitterSink 需要它 -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-webmvc</artifactId>
+    </dependency>
+
+    <!-- EmitterSink 把 SSE 事件序列化成 JSON -->
+    <dependency>
+      <groupId>com.alibaba.fastjson2</groupId>
+      <artifactId>fastjson2</artifactId>
+    </dependency>
+
+    <!-- jakarta.validation 注解 + Hibernate Validator -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- 全局异常处理里要处理 MissingServletRequestParameterException，
+         它继承自 ServletRequestBindingException -> jakarta.servlet.ServletException，
+         编译期必须能拿到 servlet API（运行期由容器提供，故为 provided） -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <scope>provided</scope>
+      <optional>true</optional>
+    </dependency>
+  </dependencies>
+</project>

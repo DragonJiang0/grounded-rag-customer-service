@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+# portal 运行镜像：只包含 portal.jar（对外问答入口 :9090 + gRPC :9091）。
+#
+# 构建上下文就是仓库根目录，所以下面用仓库内的相对路径直接 COPY，
+# 不需要再拼临时目录（jar 名由 portal 模块 pom 的 <finalName> 固定）：
+#   backend/portal/pom.xml -> target/portal.jar
+# 根目录 .dockerignore 已做白名单，只把需要的 jar 送进上下文。
+#
+# 用法（在仓库根目录）：
+#   docker build -f deploy/Dockerfile.portal -t portal:latest .
+#
+# 运行：java ${JAVA_OPTS} -jar /app/portal.jar
+# JAVA_OPTS 由 compose 的 env_file 注入，未设置时用下面的默认值。
+# 基础镜像固定为官方镜像，不做任何配置；拉取不到时由使用者自行处理（代理/自建镜像仓库等）
+FROM eclipse-temurin:21.0.12_8-jre-ubi10-minimal
+
+ENV TZ=Asia/Shanghai \
+    JAVA_OPTS="-Xms512m -Xmx1g"
+WORKDIR /app
+
+COPY backend/portal/target/portal.jar /app/portal.jar
+
+# ---------------------------------------------------------------------------
+# （可选）开启 laya 决策模型时，把模型目录一并打进镜像，避免容器运行时联网下载。
+# 做法（详见 docs/04-开启基于决策模型laya来替换llm选择agent.md）：
+#   1) 先把模型下载到仓库根目录 models/laya-multilingual-mlx/；
+#   2) 在根目录 .dockerignore 白名单放行该目录：!models
+#   3) 取消下面一行注释并重新构建，运行时 portal.ai.laya.model-source 保持默认
+#      ./models/laya-multilingual-mlx（容器内即 /app/models/laya-multilingual-mlx）即可。
+# COPY models/laya-multilingual-mlx /app/models/laya-multilingual-mlx
+# ---------------------------------------------------------------------------
+
+# 9090：HTTP（经 front 的 /portal/ 反代）；9091：gRPC（供 manage 调用）
+EXPOSE 9090 9091
+
+ENTRYPOINT ["/bin/sh", "-c", "exec java ${JAVA_OPTS} -jar /app/portal.jar"]

@@ -1,0 +1,260 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+
+option java_package="com.zidong.rpc.service";
+ 
+
+
+/**
+ * 门户对外 RPC 服务。
+ *
+ * 事件语义与 SSE 保持一致：event 取值 status / message / done / error，
+ * data 为该事件对应的文本内容，便于调用方原样转发到前端。
+ */
+service PortalService {
+
+
+    /**
+     * 提示词调试：服务端流式返回一次问答的调试过程。
+     *
+     * 依次推送 status（阶段提示）、message（累积到当前的完整文本）、done（最终答复）；
+     * 过程中出错返回 error 事件，或直接以 gRPC 状态码结束。
+     */
+    rpc DebugPrompt(DebugPromptRequest) returns (stream DebugPromptEvent);
+
+
+    /**
+     * 查询平台已注册的 Agent 元数据（供管理台做 Agent 列表/绑定选择）。
+     *
+     * 只返回展示需要的字段：名称、描述、goal 与 action 的名称描述；
+     * 提示词、模型参数、黑板绑定等内部配置一律不返回。
+     */
+    rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+
+
+    /**
+     * 绑定机器人：由主节点生成登录二维码。
+     *
+     * 只有主节点能扫码（重复扫码会让其它实例的 token 失效），非主节点返回
+     * error_code=NOT_LEADER，调用方据此提示或重试到主节点。
+     */
+    rpc CreateBotQrcode(CreateBotQrcodeRequest) returns (CreateBotQrcodeResponse);
+
+
+    /**
+     * 查询扫码绑定状态：任意实例都可调用，状态由主节点在进程内维护。
+     *
+     * 同时返回当前是否已登录，已登录时附带 ilink_bot_id / ilink_user_id。
+     */
+    rpc GetBotQrcodeStatus(GetBotQrcodeStatusRequest) returns (GetBotQrcodeStatusResponse);
+
+
+    /**
+     * 解绑机器人：清除共享存储中的登录凭证，并把处理中的消息任务重置为待处理。
+     *
+     * 只有主节点能执行，非主节点返回 error_code=NOT_LEADER。
+     */
+    rpc ResetBot(ResetBotRequest) returns (ResetBotResponse);
+
+
+}
+
+
+/** 提示词调试请求 */
+message DebugPromptRequest {
+
+    /** 提示词内容，需同时包含 {question} 与 {answer} 占位符 */
+    string prompt = 1;
+
+    /** 待调试的用户问题 */
+    string question = 2;
+
+    /** 应用 ID：命中语料时在该应用的语料范围内匹配，由调用方必传 */
+    int64  appId = 3;
+
+    /** 采样温度，取值 0.0~2.0；未设置（null）表示不覆盖、回落到模型默认值 */
+    optional double temperature = 4;
+
+    /** nucleus 采样，取值 0.1~0.9；未设置（null）表示不覆盖、回落到模型默认值 */
+    optional double topP = 5;
+
+    /** 最大输出 token 数，取值 4096~409600；未设置（null）表示不覆盖、回落到模型默认值 */
+    optional int32 maxOutputTokens = 6;
+
+    /** 会话记忆保留的问答轮数，取值 >=1；未设置（null）表示用服务端默认轮数 */
+    optional int32 memoryRounds = 7;
+
+    /** 调试任务 ID */
+    string taskId = 8;
+
+    /** 是否开启会话记忆：未设置（null）或 true 表示开启，false 表示本次调试不带上下文 */
+    optional bool memoryEnabled = 9;
+
+    /**
+     * Agent 调试模式：要调试的 Agent 名称（运行时唯一标识）。
+     * 设置后忽略 appId / prompt 的语料命中语义，直接执行该 Agent；
+     * 未设置（null）走原应用提示词调试链路。
+     */
+    optional string agentName = 10;
+
+}
+
+
+/** 调试过程事件：与 SSE 事件一一对应 */
+message DebugPromptEvent {
+
+    /** 事件名：status / message / done / error */
+    string event = 1;
+
+    /** 事件数据：message 为累积到当前的完整文本，done 为最终答复 */
+    string data = 2;
+
+}
+
+
+/** 查询 Agent 列表请求：当前无入参，保留 message 以便后续按应用/开关过滤 */
+message ListAgentsRequest {
+}
+
+
+/** 查询 Agent 列表响应 */
+message ListAgentsResponse {
+
+    /** 平台已注册的 Agent，按名称排序 */
+    repeated AgentInfo agents = 1;
+
+}
+
+
+/** Agent 元数据：只保留展示需要的字段 */
+message AgentInfo {
+
+    /** Agent 名称，同时是运行时唯一标识 */
+    string name = 1;
+
+    /** Agent 描述 */
+    string description = 2;
+
+    /** 该 Agent 能达成的目标 */
+    repeated GoalInfo goals = 3;
+
+    /** 该 Agent 的动作 */
+    repeated ActionInfo actions = 4;
+
+}
+
+
+/** Goal 的展示信息 */
+message GoalInfo {
+
+    string name = 1;
+
+    string description = 2;
+
+}
+
+
+/** Action 的展示信息 */
+message ActionInfo {
+
+    string name = 1;
+
+    string description = 2;
+
+}
+
+
+/** 绑定机器人请求 */
+message CreateBotQrcodeRequest {
+
+    /** 要绑定的应用 ID：扫码成功后该机器人收到的消息按此应用触发 embabel 回答 */
+    optional int64 appId = 1;
+
+}
+
+
+/** 绑定机器人响应 */
+message CreateBotQrcodeResponse {
+
+    /** 结果码：OK / NOT_LEADER / INTERNAL */
+    string errorCode = 1;
+
+    /** 失败原因，成功时为空 */
+    string message = 2;
+
+    /** 轮询扫码状态用的令牌 */
+    string qrcode = 3;
+
+    /** 二维码内容（供前端渲染成图片） */
+    string qrcodeImgContent = 4;
+
+    /** 二维码过期时间（毫秒时间戳） */
+    int64 expireAtMillis = 5;
+
+    /** 当前主节点实例 ID：非主节点时告知调用方该找谁 */
+    string leaderInstanceId = 6;
+
+}
+
+
+/** 查询扫码状态请求 */
+message GetBotQrcodeStatusRequest {
+
+    /** 创建二维码时返回的令牌 */
+    string qrcode = 1;
+
+}
+
+
+/** 查询扫码状态响应 */
+message GetBotQrcodeStatusResponse {
+
+    /** 结果码：OK / INTERNAL */
+    string errorCode = 1;
+
+    /** 失败原因，成功时为空 */
+    string message = 2;
+
+    /** 绑定状态：WAITING 待扫码 / CONFIRMED 已确认 / EXPIRED 二维码过期 / TIMEOUT 等待超时 / UNKNOWN 未知令牌 */
+    string status = 3;
+
+    /** 当前是否已登录（凭证是否就绪） */
+    bool isLoggedIn = 4;
+
+    /** 已登录时的机器人 ID */
+    string ilinkBotId = 5;
+
+    /** 已登录时的用户 ID */
+    string ilinkUserId = 6;
+
+    /** 当前主节点实例 ID */
+    string leaderInstanceId = 7;
+
+}
+
+
+/** 解绑请求：当前无入参 */
+message ResetBotRequest {
+}
+
+
+/** 解绑响应 */
+message ResetBotResponse {
+
+    /** 结果码：OK / NOT_LEADER / INTERNAL */
+    string errorCode = 1;
+
+    /** 失败原因，成功时为空 */
+    string message = 2;
+
+    /** 是否解绑成功 */
+    bool success = 3;
+
+    /** 被重置回待处理的消息任务条数 */
+    int32 resetTasks = 4;
+
+    /** 当前主节点实例 ID */
+    string leaderInstanceId = 5;
+
+}

@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+# manage 运行镜像：只包含 manage.jar（管理后台接口 :8080）。
+#
+# 构建上下文就是仓库根目录，所以下面用仓库内的相对路径直接 COPY，
+# 不需要再拼临时目录（jar 名由 manage 模块 pom 的 <finalName> 固定）：
+#   backend/manage/pom.xml -> target/manage.jar
+# 根目录 .dockerignore 已做白名单，只把需要的 jar 送进上下文。
+#
+# 用法（在仓库根目录）：
+#   docker build -f deploy/Dockerfile.manage -t manage:latest .
+#
+# 运行：java ${JAVA_OPTS} -jar /app/manage.jar
+# JAVA_OPTS 由 compose 的 env_file 注入，未设置时用下面的默认值。
+# 基础镜像固定为官方镜像，不做任何配置；拉取不到时由使用者自行处理（代理/自建镜像仓库等）
+FROM eclipse-temurin:21.0.12_8-jre-ubi10-minimal
+
+ENV TZ=Asia/Shanghai \
+    JAVA_OPTS="-Xms512m -Xmx1g"
+WORKDIR /app
+
+COPY backend/manage/target/manage.jar /app/manage.jar
+
+# 8080：HTTP（经 front 的 /manage/ 反代）
+EXPOSE 8080
+
+ENTRYPOINT ["/bin/sh", "-c", "exec java ${JAVA_OPTS} -jar /app/manage.jar"]

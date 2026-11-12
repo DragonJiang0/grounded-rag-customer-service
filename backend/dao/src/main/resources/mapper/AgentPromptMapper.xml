@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zidong.dao.mapper.AgentPromptMapper">
+
+    <!--
+      按 agent_name 保存提示词：agent_prompt.agent_name 上必须存在唯一键（UNIQUE KEY uk_agent_name）。
+      命中唯一键冲突时覆盖 content / updated_at，一条 SQL 完成「无则插入、有则更新」。
+    -->
+    <insert id="saveOrUpdateByAgentName">
+        INSERT INTO agent_prompt (agent_name, content, created_at, updated_at)
+        VALUES (#{prompt.agentName}, #{prompt.content}, #{prompt.createdAt}, #{prompt.updatedAt})
+        ON DUPLICATE KEY UPDATE content    = VALUES(content),
+                                updated_at = VALUES(updated_at)
+    </insert>
+</mapper>

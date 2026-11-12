@@ -1,0 +1,150 @@
+# ============================================================================
+# 快速开始编排：mysql + portal + manage + front
+#
+# 与 docker-compose.yml 内容一致，唯一的区别是应用镜像来自「已发布的仓库」，
+# 而不是本地构建的 portal:latest / manage:latest / front:latest。
+# 三个应用镜像已指向已发布地址，且配置了 pull_policy: always，每次 up 都会强制拉取最新镜像；
+# 换仓库时改这三行。
+#
+#   1) 准备： 带上本目录的 .env 与 mysql/init/（数据库首次初始化用）
+#   2) 启动：   docker compose -f docker-compose-quickstart.yml up -d
+#   3) 访问：   http://<host>:8081/ -> /apps/（管理后台）、/chat/（聊天窗口）
+#   4) 查看日志：docker compose -f docker-compose-quickstart.yml logs -f manage
+#                docker compose -f docker-compose-quickstart.yml logs -f portal
+#   5) 停止/清库：docker compose -f docker-compose-quickstart.yml down [ && rm -rf ./mysql/data ]
+#
+# 变量来自同目录 .env（从 .env.example 复制）。
+# 本文件在 deploy/ 目录下执行（`cd deploy && docker compose -f docker-compose-quickstart.yml up -d`）：
+#   - 变量读同目录 .env；
+#   - 首次启动（./mysql/data 为空）时，自动执行 ./mysql/init/*.sql 建库建表，
+#     见 mysql.volumes。数据用相对路径写入 ./mysql/data，不再使用 Docker 命名卷。
+# ============================================================================
+
+services:
+  mysql:
+    # 用官方公共镜像，任何能拉 Docker Hub/镜像源的机器都能启动；
+    # 建库建表依赖同目录 mysql/init/*.sql。
+    image:  registry.cn-hangzhou.aliyuncs.com/pushaftercommit/aicustomerservice_mysql:8.0.35
+    container_name: mysql-i
+    restart: unless-stopped
+    environment:
+      # root 密码与后端 application.yaml 默认 MYSQL_PWD 一致，后端直接用 root 账号连接
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mysql_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-server}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-time-zone=+08:00
+    # 纯内网：默认不映射到主机。需要本机用客户端连库时临时取消下面两行注释。
+    # ports:
+    #   - "127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      # 数据目录：相对本文件所在目录（deploy/），即 deploy/mysql/data。
+      # 首次启动该目录为空时才会执行下面的 init SQL；要重来就停服务后清空该目录。
+      - ./mysql/data:/var/lib/mysql
+      # 首次启动（./mysql/data 为空）时，官方 mysql entrypoint 会按文件名顺序执行这里的 *.sql：
+      #   - 库名取自上面的 MYSQL_DATABASE；
+      #   - server.sql 只有建表语句，没有 CREATE DATABASE，必须依赖 MYSQL_DATABASE 选库。
+      # 目录里已有数据时会整体跳过；要重新初始化：down 服务后 rm -rf ./mysql/data 再 up。
+      # 注意：backend/sql/ 含增量 ALTER、重复建表与假数据，且依赖仓库外基础表，请勿整目录挂进来。
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  portal:
+    # 应用镜像地址：换成真实仓库，例如 registry.example.com/ns/portal:latest
+    image: registry.cn-hangzhou.aliyuncs.com/pushaftercommit/aicustomerservice_portal:release_v1
+    # 每次 up 都强制拉取，避免本机缓存了同名旧 tag 导致前后端版本不一致
+    pull_policy: always
+    container_name: portal
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 刻意不设 SERVER_PORT：端口取 application.yaml 的默认值 9090
+      # 容器内拓扑固定用服务名，避免被 .env 误覆盖
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-server}
+      # 数据库账号复用 application.yaml 默认：root / mysql_root
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:-mysql_root}
+      PORTAL_RPC_PORT: "9091"
+      # 其余变量（LLM_API_KEY / LLM_BASE_URL / LLM_MODEL / LLM_LOG_ENABLED /
+      # LAYA_ENABLED / LAYA_MODEL_SOURCE / HF_ENDPOINT / HF_TOKEN / LAYA_CACHE /
+      # LOG_LEVEL / JAVA_OPTS）由 .env 经 env_file 注入；
+      # .env 未定义时使用 application.yaml 的默认值。
+    expose:
+      - "9090"
+      - "9091"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # HTTP 9090 + gRPC 9091 都要在
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/9090' && timeout 3 bash -c '</dev/tcp/127.0.0.1/9091'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
+  manage:
+    # 应用镜像地址：换成真实仓库，例如 registry.example.com/ns/manage:latest
+    image: registry.cn-hangzhou.aliyuncs.com/pushaftercommit/aicustomerservice_manage:release_v1
+    # 每次 up 都强制拉取，避免本机缓存了同名旧 tag 导致前后端版本不一致
+    pull_policy: always
+    container_name: manage
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 刻意不设 SERVER_PORT：端口取 application.yaml 的默认值 8080
+      # 容器内拓扑固定用服务名，避免被 .env 误覆盖
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-server}
+      # 数据库账号复用 application.yaml 默认：root / mysql_root
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:-mysql_root}
+      # portal 与 manage 分属两个容器，gRPC 必须走服务名而不是 127.0.0.1
+      PORTAL_RPC_HOST: portal
+      PORTAL_RPC_PORT: "9091"
+      # 其余变量（LLM_API_KEY / LLM_BASE_URL / LLM_MODEL / LOG_LEVEL /
+      # RPC_CLIENT_DEADLINE_SECONDS / JAVA_OPTS）由 .env 经 env_file 注入；
+      # .env 未定义时使用 application.yaml 的默认值。
+    expose:
+      - "8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      portal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
+  front:
+    # 应用镜像地址：换成真实仓库，例如 registry.example.com/ns/front:latest
+    image: registry.cn-hangzhou.aliyuncs.com/pushaftercommit/aicustomerservice_front:release_v1
+    # 每次 up 都强制拉取，避免本机缓存了同名旧 tag 导致前后端版本不一致
+    pull_policy: always
+    container_name: front
+    restart: unless-stopped
+    ports:
+      - "${FRONT_HOST_PORT:-8081}:80"
+    depends_on:
+      # 等两个后端都健康再启动 nginx，避免启动期连不上上游返回 502
+      manage:
+        condition: service_healthy
+      portal:
+        condition: service_healthy
+
+# 不再声明顶层命名卷：MySQL 数据改用相对路径 ./mysql/data 绑定挂载。

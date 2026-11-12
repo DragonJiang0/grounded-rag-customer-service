@@ -1,0 +1,66 @@
+# ============================================================================
+# 全仓库统一忽略规则（原先分散在 backend / front / chatfront / deploy 下的
+# .gitignore 已合并到此处，那些文件已删除）。
+#
+# 规则不写前导斜杠，可匹配任意层级，例如 target/ 同时覆盖 backend/manage/target。
+# ============================================================================
+
+# ---------- 依赖 / 构建产物 ----------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+target/
+*.class
+# JVM 堆转储：OOM 时生成，可能含内存中的密钥与业务数据
+*.hprof
+
+# ---------- 本地模型权重 ----------
+# laya 模型目录（application.yaml 中 model-source: ./models/laya-multilingual-mlx），
+# 体积可达数 GB，不可提交
+models/
+
+# ---------- IDE / 编辑器 / 系统 ----------
+.idea/
+.vscode/
+*.iml
+*.suo
+*.sw?
+.DS_Store
+Thumbs.db
+
+# ---------- AI Agent 工具的本地缓存 / agent 定义 ----------
+# 各 AI 编码工具的会话缓存、本地生成的 md 与 agent 定义，仅本机有用，不入库
+.codebuddy/
+.claude/
+.cursor/
+.windsurf/
+.comate/
+.agents/
+.gemini/
+.aider*
+AGENTS.md
+.gpte/
+.trae/
+.baize/
+
+# ---------- 环境变量 ----------
+# 真实值只放本地 .env；模板必须提交
+.env
+.env.*
+!.env.example
+*.local
+
+# ---------- 本地部署脚本目录（不随仓库发布） ----------
+# localdeploy/ 只放本机使用的构建与启动脚本；对外发布的是 deploy/ 下的
+# docker-compose.yml / Dockerfile* / 配置模板，构建命令见 README「快速开始」。
+localdeploy/
+
+# ---------- 日志 / 运行期文件 ----------
+*.log
+logs/
+
+# ---------- 运行期数据目录 ----------
+# MySQL 数据用相对路径绑定挂载到 deploy/mysql/data（见 docker-compose*.yml），
+# 含真实业务数据与账号，且容器启动后目录会被 chown 成 mysql 用户，不能入库。
+deploy/mysql/data/

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zidong.dao.mapper.CorpusMapper">
+
+    <resultMap id="CorpusVOMap" type="com.zidong.dao.vo.CorpusVO">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="answer" property="answer"/>
+        <result column="group_id" property="groupId"/>
+        <result column="enabled" property="enabled"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!--
+      分页查询语料本身：分组精确匹配，名称 / 答案模糊匹配，关键词命中任意一条问题即算命中。
+      这里只查 corpus 一张表，不 join corpus_question：
+      join 会让「一页 size 条」被问题条数放大，翻页条数与总数都不准。
+      问题列表由 Service 按当前页的语料 ID 批量补齐（见 CorpusService#fillQuestions）。
+    -->
+    <select id="selectPageByQuery" resultMap="CorpusVOMap">
+        SELECT c.id,
+               c.name,
+               c.answer,
+               c.group_id,
+               c.enabled,
+               c.created_at,
+               c.updated_at
+        FROM corpus c
+        <where>
+            <if test="query.groupId != null">
+                AND c.group_id = #{query.groupId}
+            </if>
+            <if test="query.name != null and query.name != ''">
+                AND c.name LIKE CONCAT('%', #{query.name}, '%')
+            </if>
+            <if test="query.answer != null and query.answer != ''">
+                AND c.answer LIKE CONCAT('%', #{query.answer}, '%')
+            </if>
+            <!-- 关键词已由 CorpusPageQueryDto#getKeywords 去空白、去重 -->
+            <if test="query.keywords != null and query.keywords.size() > 0">
+                AND EXISTS (
+                    SELECT 1
+                    FROM corpus_question cq
+                    WHERE cq.corpus_id = c.id
+                    <!-- 括号不能省：多个关键词之间是 OR，不加括号会被 AND 抢优先级，误命中其它语料 -->
+                    AND (
+                    <foreach collection="query.keywords" item="keyword" separator=" OR ">
+                        cq.question LIKE CONCAT('%', #{keyword}, '%')
+                    </foreach>
+                    )
+                )
+            </if>
+        </where>
+        ORDER BY c.id ASC
+    </select>
+
+    <!--
+      按问题文本批量查询答案：
+      corpus_question 一条问题关联一条语料，通过 question 精确匹配即可命中对应语料答案。
+      questions 为空时由调用方拦截，这里不拼 IN () 这类非法 SQL。
+    -->
+    <select id="listAnswersByQuestions" resultType="java.lang.String">
+        SELECT  DISTINCT c.answer
+        FROM corpus c
+        INNER JOIN corpus_question cq ON c.id = cq.corpus_id
+        WHERE cq.question IN
+        <foreach collection="questions" item="question" open="(" separator="," close=")">
+            #{question}
+        </foreach>
+    </select>
+</mapper>

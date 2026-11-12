@@ -1,0 +1,15 @@
+/* 全局样式重置：消除浏览器默认的 body margin，保证整页布局（100vh）不被偏移 */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+#app {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}

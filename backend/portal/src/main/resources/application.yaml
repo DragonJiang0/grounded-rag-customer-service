@@ -1,0 +1,105 @@
+# ============================================================================
+# portal 生产环境配置（prod profile）
+#
+# 生效方式：容器内设置 SPRING_PROFILES_ACTIVE=prod，本文件随 jar 打包，
+# 覆盖 application.yml 中的同名配置；application.yml 保持原样不动。
+#
+# 所有 ${VAR:默认值} 均可由 deploy/.env 覆盖；未定义时使用此处默认值。
+# 变量清单、默认值与对应位置见 deploy/CONFIG.md。
+# ============================================================================
+server:
+  port: ${SERVER_PORT:9090}
+
+spring:
+  security:
+    filter:
+      dispatcher-types: request, error
+  datasource:
+    # 容器内通过 compose 服务名 mysql 访问；本地裸跑可用 MYSQL_HOST 覆盖。
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PWD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: agent
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+# embabel 的模型配置（agent 规划 / 排序 / default-llm）
+embabel:
+  models:
+    default-llm: ${LLM_MODEL}
+
+  agent:
+    platform:
+      models:
+        openai:
+          custom:
+            api-key: ${LLM_API_KEY}
+            base-url: ${LLM_BASE_URL}
+            models: ${LLM_MODEL}
+
+# portal 自己直连的 OpenAI 兼容模型（langchain4j -> ChatModelConfig#customOpenAiChatModel）
+portal:
+  ai:
+    chat:
+      api-key: ${LLM_API_KEY}
+      base-url: ${LLM_BASE_URL}
+      model: ${LLM_MODEL}
+      # 是否打印模型请求体/响应体；生产建议 false，排查时临时打开。
+      log-enabled: ${LLM_LOG_ENABLED:true}
+
+    # 多 Agent 选择：laya 决策模型（进程内推理，替代 LLM 排序）
+    laya:
+      # 部署开关（.env 的 LAYA_ENABLED），默认关闭；开启需额外挂载模型目录，并把 JAVA_OPTS 堆上限调到 3G 以上。
+      enabled: ${LAYA_ENABLED:false}
+      # 模型路径（.env 的 LAYA_MODEL_SOURCE）：相对「进程工作目录」。目录不存在时会尝试按 repo id 下载。
+      model-source: ${LAYA_MODEL_SOURCE}
+      # 兜底选项：没命中任何业务 Agent 时落到它
+      fallback-label: None
+      fallback-description: 以上都不合适：打招呼、寒暄、闲聊、常识问题，或与上述助手职责无关的问题
+      # 选中所需的最低概率（choice 的 top1）
+      min-score: 0.5
+      # top1 与 top2 的最小差距
+      margin: 0.15
+      # 决策时带上的历史轮数（1 轮 = 用户 + 助手各一条）
+      history-turns: 3
+      # 候选 Agent 白名单，留空 = 平台内全部 Agent
+      candidates: []
+      exclude-prefixes:
+        - Debug
+
+  # 全局日志级别变量：只在这里定义一次，logging.level.* 各处引用
+  log:
+    level: ${LOG_LEVEL:info}
+
+# 级别统一引用 portal.log.level：改一处（或环境变量 LOG_LEVEL）即全局生效。
+logging:
+  level:
+    # 不声明 com.zidong.dao.mapper / com.zidong：业务包（含 mapper）走 Spring Boot 默认 INFO，不再打印 SQL；
+    # 需要业务 debug 时再单独打开 com.zidong，切勿连带打开 mapper 包
+    # agent 规划
+    com.embabel: ${portal.log.level}
+    # Embabel 与模型的一来一回
+    com.embabel.agent.spi.support: ${portal.log.level}
+    # portal 直连模型（langchain4j）
+    dev.langchain4j.http.client.log: ${portal.log.level}
+    org.springframework.security: ${portal.log.level}

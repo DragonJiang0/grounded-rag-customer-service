@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zidong.dao.mapper.AppCorpusGroupMapper">
+
+    <!--
+      查询应用下全部语料问题：
+      一个应用在 app_corpus_group 中可绑多个分组，每个分组下又有多条问题，
+      跨分组存在相同问题时会产生重复，故用 DISTINCT 去重，只返回问题文本本身。
+    -->
+    <select id="listQuestionsByAppId" resultType="java.lang.String">
+        SELECT DISTINCT cq.question
+        FROM app_corpus_group acg
+                 INNER JOIN corpus_question cq ON acg.group_id = cq.group_id
+        WHERE acg.app_id = #{appId}
+    </select>
+</mapper>

@@ -1,0 +1,11 @@
+# 各 Dockerfile 都以仓库根目录为构建上下文，这里是白名单：
+# 除下面这些文件/目录外，其余内容都不进构建上下文。
+*
+# deploy/Dockerfile.portal
+!backend/portal/target/portal.jar
+# deploy/Dockerfile.manage
+!backend/manage/target/manage.jar
+# deploy/Dockerfile.front
+!front/dist
+!chatfront/dist
+!deploy/nginx/front.conf

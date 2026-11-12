@@ -1,0 +1,43 @@
+/* ============================================================
+   theme.css —— Element Plus 主题变量覆盖 + 项目自身变量 + 全局元素外观。
+
+   注意：本文件必须在 Element Plus 的样式之后加载，因此统一在 main.js
+   的最后引入（main.js 里先 import App / router，再 import 本文件）。
+   调配色 / 间距只改这一处。
+   ============================================================ */
+
+/* ---------- 1. Element Plus 主题变量覆盖（淡蓝） ---------- */
+:root{
+  --el-color-primary:        #3E8BFF;
+  --el-color-primary-light-3:#6BA6FF;
+  --el-color-primary-light-5:#9CC2FF;
+  --el-color-primary-light-7:#C6DCFF;
+  --el-color-primary-light-8:#DCEAFF;
+  --el-color-primary-light-9:#EEF5FF;
+  --el-color-primary-dark-2: #2C74E8;
+
+  --el-border-radius-base:   10px;   /* 方中有圆润 */
+  --el-border-radius-small:  8px;
+  --el-component-size-large: 46px;   /* 大按钮 / 大输入框 */
+  --el-font-size-base:       14px;
+}
+
+/* ---------- 2. 项目自身变量 ---------- */
+:root{
+  --brand:#3E8BFF; --brand-dark:#2C74E8;
+  --brand-soft:#EAF3FF; --brand-soft-2:#F5F9FF;
+  --bg:#F1F6FC; --text:#1F2A3A; --muted:#7E8FA8; --line:#DFE9F5;
+  --ok:#2FA36B; --warn:#E8912B; --danger:#E45B5B;
+
+  --radius-sm:8px; --radius:10px; --radius-lg:12px;
+  --shadow:0 2px 10px rgba(46,102,180,.06);
+}
+
+/* ---------- 3. 大按钮（全局） ---------- */
+.el-button{font-weight:600;border-radius:var(--radius);}
+.el-button--large{height:46px;padding:0 26px;font-size:15px;border-radius:var(--radius);}
+.el-button--primary{box-shadow:0 3px 10px rgba(62,139,255,.28);}
+.el-button--primary:hover{background:var(--brand-dark);border-color:var(--brand-dark);}
+.el-input__wrapper{border-radius:var(--radius);}
+.el-tag{border-radius:var(--radius-sm);font-weight:500;}
+.btn-icon{margin-right:6px;}

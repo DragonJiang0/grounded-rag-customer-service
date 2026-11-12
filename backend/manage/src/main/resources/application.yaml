@@ -1,0 +1,54 @@
+# ============================================================================
+# manage 生产环境配置（prod profile）
+#
+# 生效方式：容器内设置 SPRING_PROFILES_ACTIVE=prod，本文件随 jar 打包，
+# 覆盖 application.yml 中的同名配置；application.yml 保持原样不动。
+#
+# 所有 ${VAR:默认值} 均可由 deploy/.env 覆盖；未定义时使用此处默认值。
+# 变量清单、默认值与对应位置见 deploy/CONFIG.md。
+# ============================================================================
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  security:
+    filter:
+      dispatcher-types: request, error
+  datasource:
+    # 容器内通过 compose 服务名 mysql 访问；本地裸跑可用 MYSQL_HOST 覆盖。
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PWD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: agent
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+logging:
+  level:
+    # 不声明 com.zidong：业务包（含 com.zidong.dao.mapper）走 Spring Boot 默认 INFO，不再打印 SQL；
+    # 需要业务 debug 时再单独打开 com.zidong，切勿连带打开 mapper 包
+    org.springframework.security: warn
+
+# gRPC 客户端：name 与 RpcServerEnum 对齐；portal 侧 RpcServerConfig 固定监听 9091
+rpc:
+  client:
+    # 调用超时（秒），全局默认，可被每个服务单独覆盖。
+    deadline-seconds: ${RPC_CLIENT_DEADLINE_SECONDS:240}
+    configs:
+      - name: portal
+        # 容器内通过 compose 服务名访问 portal；本地裸跑可用 PORTAL_RPC_HOST 覆盖。
+        host: ${PORTAL_RPC_HOST:127.0.0.1}
+        port: ${PORTAL_RPC_PORT:9091}
